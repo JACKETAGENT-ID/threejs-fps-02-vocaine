@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arctic Relay — a three.js tactical FPS</title>
+<style>
+  /* Look plan: deep sky, snow ink, steel hairlines, aurora accent, danger red. */
+  :root {
+    --canvas: #0a1626;
+    --surface: #12233a;
+    --hairline: #2b4258;
+    --ink: #eef4fa;
+    --muted: #8fa5b8;
+    --accent: #46e0b6;
+    --danger: #ff5d47;
+    --gold: #ffd27a;
+    --radius-panel: 6px;
+    --radius-control: 8px;
+    --font-ui: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-readout: ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-ui);
+  }
+  #game, #game canvas { position: fixed; inset: 0; display: block; }
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+
+  #crosshair { position: fixed; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); }
+  #crosshair i { position: absolute; background: var(--ink); opacity: .9; }
+  #crosshair i:nth-child(1) { left: 10px; top: 0; width: 2px; height: 7px; }
+  #crosshair i:nth-child(2) { left: 10px; bottom: 0; width: 2px; height: 7px; }
+  #crosshair i:nth-child(3) { top: 10px; left: 0; height: 2px; width: 7px; }
+  #crosshair i:nth-child(4) { top: 10px; right: 0; height: 2px; width: 7px; }
+
+  #hitmarker { position: fixed; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%, -50%) rotate(45deg); opacity: 0; transition: opacity 90ms linear; }
+  #hitmarker.on { opacity: 1; }
+  #hitmarker.kill i { background: var(--danger); }
+  #hitmarker i { position: absolute; background: var(--accent); }
+  #hitmarker i:nth-child(1) { left: 12px; top: 0; width: 2px; height: 8px; }
+  #hitmarker i:nth-child(2) { left: 12px; bottom: 0; width: 2px; height: 8px; }
+  #hitmarker i:nth-child(3) { top: 12px; left: 0; height: 2px; width: 8px; }
+  #hitmarker i:nth-child(4) { top: 12px; right: 0; height: 2px; width: 8px; }
+
+  #damage { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 120ms linear;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 60, 40, 0.45) 100%); }
+  #damage.on { opacity: 1; }
+
+  #ammo {
+    position: fixed;
+    right: 32px;
+    bottom: 24px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: var(--font-readout);
+    font-size: 56px;
+    line-height: 1;
+    color: var(--ink);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  }
+  #ammo.empty #ammo-mag { color: var(--danger); }
+  #ammo-reserve { font-size: 16px; color: var(--muted); }
+  #ammo-meta { position: fixed; right: 32px; bottom: 88px; text-align: right; font-family: var(--font-readout); font-size: 14px; color: var(--muted); }
+  #ammo-weapon { color: var(--ink); font-weight: 600; }
+  #grenade-num { color: var(--accent); margin-left: 10px; }
+
+  #health {
+    position: fixed;
+    left: 32px;
+    bottom: 24px;
+    width: 220px;
+    font-family: var(--font-readout);
+  }
+  #health-bar { height: 10px; border: 1px solid var(--hairline); border-radius: 5px; overflow: hidden; background: rgba(10, 22, 38, 0.7); }
+  #health-fill { height: 100%; width: 100%; background: var(--accent); transition: width 150ms linear; }
+  #health-fill.low { background: var(--danger); }
+  #health-line { display: flex; gap: 8px; margin-top: 6px; font-size: 14px; color: var(--muted); }
+  #health-num { color: var(--ink); font-size: 22px; }
+  #armor-num { color: var(--gold); }
+
+  #topbar {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-family: var(--font-readout);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  }
+  #timer-num { font-size: 34px; }
+  #timer-num.buy { color: var(--gold); }
+  #score-num { font-size: 24px; }
+  #round-num { font-size: 13px; color: var(--muted); letter-spacing: 0.12em; }
+  #money-num { font-size: 18px; color: var(--gold); }
+
+  #hint {
+    position: fixed;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 14px;
+    color: var(--muted);
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  }
+
+  #plant-wrap {
+    position: fixed;
+    top: 104px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 300px;
+    text-align: center;
+  }
+  #plant-wrap[hidden] { display: none; }
+  #plant-label { font-family: var(--font-readout); font-size: 13px; letter-spacing: 0.1em; color: var(--accent); margin-bottom: 6px; text-shadow: 0 2px 6px rgba(0,0,0,0.7); }
+  #plant-bar { height: 8px; border: 1px solid var(--hairline); border-radius: 4px; overflow: hidden; background: rgba(10, 22, 38, 0.7); }
+  #plant-fill { height: 100%; width: 0%; background: var(--accent); }
+  #plant-fill.danger { background: var(--danger); }
+
+  #feed {
+    position: fixed;
+    right: 32px;
+    top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+    font-family: var(--font-readout);
+    font-size: 13px;
+    color: var(--ink);
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  }
+  .feed-item { opacity: 1; transition: opacity 1s linear; }
+  .feed-item.fade { opacity: 0.25; }
+
+  #buy {
+    position: fixed;
+    left: 32px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 320px;
+    padding: 20px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-panel);
+    pointer-events: auto;
+  }
+  #buy[hidden] { display: none; }
+  #buy h2 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+  #buy h2 span { float: right; color: var(--gold); font-family: var(--font-readout); font-size: 16px; }
+  #buy p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  .buy-item {
+    padding: 10px 12px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-control);
+    margin-bottom: 8px;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px 10px;
+  }
+  .buy-item:hover { border-color: var(--accent); }
+  .buy-item b { font-size: 15px; font-weight: 600; }
+  .buy-item span { color: var(--gold); font-family: var(--font-readout); font-size: 14px; }
+  .buy-item i { grid-column: 1 / -1; font-style: normal; font-size: 12px; color: var(--muted); }
+  .buy-item.owned { opacity: 0.45; cursor: default; border-style: dashed; }
+  .buy-item.poor { opacity: 0.55; }
+  .buy-item.poor span { color: var(--danger); }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: color-mix(in srgb, var(--canvas) 82%, transparent);
+    pointer-events: auto;
+  }
+  .overlay[hidden] { display: none; }
+  .panel {
+    width: min(460px, 100%);
+    padding: 32px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-panel);
+  }
+  .panel h1 { margin: 0 0 8px; font-size: 32px; line-height: 1.15; font-weight: 600; letter-spacing: -0.02em; }
+  .panel h1::after { content: ' ❄'; color: var(--accent); }
+  .panel p { margin: 0 0 24px; max-width: 46ch; font-size: 16px; line-height: 1.5; color: var(--muted); }
+  #play {
+    font: inherit;
+    font-weight: 600;
+    padding: 12px 20px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-control);
+    background: var(--accent);
+    color: var(--canvas);
+    cursor: pointer;
+  }
+  #play:hover { background: var(--ink); border-color: var(--ink); }
+  #play:disabled { opacity: 0.5; cursor: default; }
+  .keys { margin: 24px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; color: var(--muted); }
+  .keys li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .keys kbd {
+    min-width: 24px;
+    padding: 2px 6px;
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    font-family: var(--font-readout);
+    font-size: 12px;
+    color: var(--ink);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="hud" aria-hidden="true">
+  <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+  <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+  <div id="damage"></div>
+  <div id="topbar">
+    <span id="round-num">ROUND 1 / 5</span>
+    <span id="score-num">0 : 0</span>
+    <span id="timer-num">1:40</span>
+    <span id="money-num">$800</span>
+  </div>
+  <div id="hint">Plant the relay charge at the dome pad — or clear the Drifters.</div>
+  <div id="plant-wrap" hidden>
+    <div id="plant-label">PLANTING RELAY CHARGE</div>
+    <div id="plant-bar"><div id="plant-fill"></div></div>
+  </div>
+  <div id="feed"></div>
+  <div id="health">
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="health-line"><span id="health-num">100</span><span>HP</span><span id="armor-num"></span></div>
+  </div>
+  <div id="ammo-meta"><span id="ammo-weapon">Aurora Rifle</span><span id="grenade-num"></span></div>
+  <div id="ammo"><span id="ammo-mag">30</span><span id="ammo-reserve">/ 90</span></div>
+</div>
+
+<div id="buy" hidden>
+  <h2>Buy phase <span id="buy-money">$800</span></h2>
+  <p>Round earnings refill your kit. Click to buy — weapons stay yours all match.</p>
+  <div id="buy-items"></div>
+</div>
+
+<div id="overlay" class="overlay">
+  <section class="panel" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
+    <h1 id="overlay-title">ARCTIC RELAY</h1>
+    <p id="overlay-copy">Relay Station K-7, 78° north. Plant the relay charge at the dome pad — or clear all four Drifters. First to 3 rounds takes the station.</p>
+    <button id="play" type="button">Deploy</button>
+    <ul class="keys">
+      <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move</li>
+      <li><kbd>Mouse</kbd> Look &nbsp;·&nbsp; <kbd>Click</kbd> Fire &nbsp;·&nbsp; <kbd>RMB</kbd> Aim</li>
+      <li><kbd>R</kbd> Reload &nbsp;·&nbsp; <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Weapons</li>
+      <li><kbd>G</kbd> Cryo grenade</li>
+      <li><kbd>E</kbd> Plant charge (on the pad) &nbsp;·&nbsp; <kbd>Ctrl</kbd> Crouch</li>
+      <li><kbd>Space</kbd> Jump</li>
+    </ul>
+  </section>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
