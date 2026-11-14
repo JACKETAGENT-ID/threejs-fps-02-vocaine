@@ -12,12 +12,16 @@ dome pad and defend it until it detonates — or clear the Drifters. First to
   win or a loss, and a HUD with health, armour, ammo, round timer and score.
 - **Gunplay:** headshots deal bonus damage, recoil and spread punish firing on
   the move, crouching steadies the aim, movement has acceleration and friction,
-  and the map collides on every wall, crate and ice ridge.
+  floating damage numbers mark every hit, and the map collides on every wall,
+  crate and ice ridge.
 - **Tactics:** a bomb to plant (hold E on the dome pad) and defend against
   defuse, money earned each round and spent in the buy menu, three weapons
-  (Aurora Rifle, Frostbite SMG, Long Night sniper) and a cryo grenade that
-  slows bots, and bots that follow patrol routes, hold positions and converge
-  on the pad once the charge is planted.
+  (Aurora Rifle, Frostbite SMG, Long Night sniper), a cryo grenade that
+  slows bots and a smoke grenade (Q) whose cloud blocks Drifter sight, a
+  live minimap, and four bot archetypes with different behaviour — Sable
+  the Holder, Rime the Sniper, Gale the Rusher (he hunts your gunfire) and
+  Frost the Flanker (he works the lane opposite to yours and cuts across
+  mid when the charge is planted).
 - **The map:** an original arctic research station — Relay Dome, Hab and Lab
   modules, comms tower, snowdrifts, ice walls and crates — under an aurora sky
   with falling snow, cold moonlight and warm door lamps.
@@ -33,8 +37,9 @@ node serve.ts        # game/ on http://localhost:8080
 ```
 
 Click Deploy, then play. `B` is not needed — the buy menu opens between
-rounds. `1/2/3` switch weapons, `G` throws a cryo grenade, `E` plants the
-charge on the pad, `Ctrl` crouches, `Space` jumps, right mouse aims.
+rounds. `1/2/3` switch weapons, `G` throws a cryo grenade, `Q` throws a
+smoke grenade, `E` plants the charge on the pad, `Ctrl` crouches, `Space`
+jumps, right mouse aims.
 
 ## Screenshots
 

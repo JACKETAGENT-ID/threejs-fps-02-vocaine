@@ -5,6 +5,7 @@ const BUY_ITEMS = [
   { id: 'smg', name: 'Frostbite SMG', price: 900, desc: 'Fast close-quarters spray, 32-round mag.' },
   { id: 'sniper', name: 'Long Night', price: 1800, desc: 'One-shot precision at range, 5-round mag.' },
   { id: 'grenade', name: 'Cryo Grenade', price: 250, desc: 'Blast + freeze: slows Drifters for 4s.' },
+  { id: 'smoke', name: 'Smoke Grenade', price: 200, desc: 'Thick cover for 8s: blocks Drifter sight.' },
   { id: 'armor', name: 'Plated Vest', price: 400, desc: 'Absorbs 60% of damage until it breaks.' },
 ];
 
@@ -36,6 +37,23 @@ export function createHud() {
   const buyMoney = el('buy-money');
   const buyItems = el('buy-items');
   const crosshair = el('crosshair');
+  const minimap = el('minimap');
+  const minimapCtx = minimap ? minimap.getContext('2d') : null;
+  const damageLayer = el('damage-numbers');
+
+  // Floating damage numbers: a small pool of divs, reused so a firefight
+  // never allocates DOM nodes mid-frame.
+  const damagePool = [];
+  let damageIndex = 0;
+  if (damageLayer) {
+    for (let i = 0; i < 10; i += 1) {
+      const div = document.createElement('div');
+      div.className = 'dmg-num';
+      damageLayer.appendChild(div);
+      damagePool.push(div);
+    }
+  }
+  let lastMinimapDraw = 0;
 
   let lastHealth = -1;
   let lastArmor = -1;
@@ -82,16 +100,16 @@ export function createHud() {
       healthNum.textContent = String(Math.ceil(hp));
       armorNum.textContent = armor > 0 ? `+${Math.ceil(armor)}` : '';
     },
-    setAmmo(mag, reserve, weaponName, grenades) {
-      if (mag !== lastMag || reserve !== lastReserve || weaponName !== lastWeapon || grenades !== lastGrenades) {
+    setAmmo(mag, reserve, weaponName, grenadeText) {
+      if (mag !== lastMag || reserve !== lastReserve || weaponName !== lastWeapon || grenadeText !== lastGrenades) {
         lastMag = mag;
         lastReserve = reserve;
         lastWeapon = weaponName;
-        lastGrenades = grenades;
+        lastGrenades = grenadeText;
         ammoMag.textContent = String(mag);
         ammoReserve.textContent = `/ ${reserve}`;
         ammoWeapon.textContent = weaponName;
-        grenadeNum.textContent = grenades > 0 ? `◈ ${grenades}` : '';
+        grenadeNum.textContent = grenadeText || '';
         el('ammo').classList.toggle('empty', mag === 0);
       }
     },
@@ -117,6 +135,81 @@ export function createHud() {
       if (text === lastRound) return;
       lastRound = text;
       roundNum.textContent = text;
+    },
+    damageNumber(x, y, text, kind) {
+      if (damagePool.length === 0) return;
+      const div = damagePool[damageIndex];
+      damageIndex = (damageIndex + 1) % damagePool.length;
+      div.textContent = text;
+      div.className = `dmg-num ${kind === 'head' ? 'head' : ''}`;
+      div.style.left = `${Math.round(x)}px`;
+      div.style.top = `${Math.round(y)}px`;
+      // Restart the rise-and-fade transition.
+      void div.offsetWidth;
+      div.classList.add('show');
+      setTimeout(() => div.classList.remove('show'), 750);
+    },
+    // Live minimap: the station bowl, the dome pad, the player arrow and every
+    // Drifter still standing. Redrawn at most 8 times a second.
+    setMinimap(data) {
+      if (!minimapCtx) return;
+      const now = performance.now();
+      if (now - lastMinimapDraw < 120) return;
+      lastMinimapDraw = now;
+      const W = 150;
+      const H = 140;
+      const sx = W / 47;
+      const sy = H / 43;
+      const px = (x) => (x + 23.5) * sx;
+      const pz = (z) => (z + 21.5) * sy;
+      const ctx = minimapCtx;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(10, 22, 38, 0.55)';
+      ctx.fillRect(0, 0, W, H);
+      // Blocks: hab west, lab east, comms tower, dome.
+      ctx.fillStyle = '#8fa5b8';
+      ctx.fillRect(px(-15.6), pz(-7.5), 4.2 * sx, 11 * sy);
+      ctx.fillRect(px(11.3), pz(-8.5), 4.4 * sx, 9 * sy);
+      ctx.fillRect(px(4.3), pz(-8.2), 1.4 * sx, 1.4 * sy);
+      ctx.beginPath();
+      ctx.arc(px(0), pz(-15.5), 5.2 * sx, 0, Math.PI * 2);
+      ctx.fillStyle = '#5f7fa8';
+      ctx.fill();
+      // Plant pad.
+      ctx.beginPath();
+      ctx.arc(px(0), pz(-9.6), 2.3 * sx, 0, Math.PI * 2);
+      ctx.strokeStyle = data.charge === 'planted' ? '#ff5d47' : '#46e0b6';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      if (data.charge === 'planted') {
+        ctx.beginPath();
+        ctx.arc(px(0), pz(-9.6), (2.3 + Math.sin(now / 180) * 0.8) * sx, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 93, 71, 0.6)';
+        ctx.stroke();
+      }
+      // Drifters: red while alive, grey when down.
+      for (const bot of data.bots) {
+        ctx.beginPath();
+        ctx.arc(px(bot.x), pz(bot.z), 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = bot.alive ? '#ff5d47' : '#5a6b7c';
+        ctx.fill();
+      }
+      // The player, an arrow pointing where they face (yaw 0 faces north, up).
+      ctx.save();
+      ctx.translate(px(data.x), pz(data.z));
+      ctx.rotate(-data.yaw);
+      ctx.fillStyle = '#46e0b6';
+      ctx.beginPath();
+      ctx.moveTo(0, -6);
+      ctx.lineTo(4.4, 5);
+      ctx.lineTo(-4.4, 5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      // Frame.
+      ctx.strokeStyle = '#2b4258';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
     },
     setHint(text) {
       if (hintBar.textContent !== text) hintBar.textContent = text;
@@ -175,7 +268,7 @@ export function createHud() {
     showOverlay(mode, state) {
       if (mode === 'start') {
         overlayTitle.textContent = 'ARCTIC RELAY';
-        overlayCopy.textContent = 'Relay Station K-7, 78° north. Plant the relay charge at the dome pad — or clear all four Drifters. First to 3 rounds takes the station.';
+        overlayCopy.textContent = 'Relay Station K-7, 78° north. Plant the relay charge at the dome pad — or clear the Drifters. Sable holds the lanes, Rime snipes, Gale hunts your gunfire, Frost flanks. Smoke (Q) breaks their sight.';
         playBtn.textContent = 'Deploy';
       } else if (mode === 'paused') {
         overlayTitle.textContent = 'Paused';

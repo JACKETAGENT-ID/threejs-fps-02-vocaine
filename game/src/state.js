@@ -45,6 +45,7 @@ export function createState() {
     matchWinner: WIN.NONE,
     frozen: false,
     lastKill: '',
+    lastShotTime: -99, // seconds; bots that hear a shot hunt the sound
     feed: [],
   };
 }

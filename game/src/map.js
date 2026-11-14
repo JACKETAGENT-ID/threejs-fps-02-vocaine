@@ -87,6 +87,13 @@ export function createMap(scene, random) {
   const beaconLight = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), mats.accent);
   beaconLight.position.set(0, 2.75, -9.6);
   group.add(beaconLight);
+  // A soft light column over the pad, so the objective reads from anywhere.
+  const beam = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 1.4, 15, 14, 1, true),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(PALETTE.accent), transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false }),
+  );
+  beam.position.set(0, 7.5, -9.6);
+  group.add(beam);
 
   // Hab module, west lane: long block with warm lit windows and a door.
   box(4.2, 3.1, 11, -13.5, 1.55, -2, 'hab');
@@ -114,6 +121,8 @@ export function createMap(scene, random) {
   box(1.5, 1.5, 1.5, -5, 0.75, 2.8, 'hab');
   box(1.5, 1.5, 1.5, 7.5, 0.75, 1, 'steelDark');
   box(1.5, 1.5, 1.5, 7.5, 0.75, 2.6, 'steel');
+  box(1.5, 1.5, 1.5, -10.5, 0.75, -5.5, 'steelDark');
+  box(1.5, 1.5, 1.5, 10.5, 0.75, -6.5, 'steel');
   box(2.2, 1.1, 1.2, -2.5, 0.55, -5.5, 'steelDark');
   box(2.2, 1.1, 1.2, 3.2, 0.55, -13.2, 'hab');
   box(1.2, 2.4, 1.2, -9.5, 1.2, -8.5, 'ice');
@@ -193,7 +202,7 @@ export function createMap(scene, random) {
   for (let r = 0; r < 3; r += 1) {
     const geo = new THREE.PlaneGeometry(70, 9, 40, 1);
     const mat = new THREE.MeshBasicMaterial({
-      color: ribbonColors[r], transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending,
+      color: ribbonColors[r], transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide, depthWrite: false, fog: false,
     });
     const ribbon = new THREE.Mesh(geo, mat);
@@ -204,8 +213,8 @@ export function createMap(scene, random) {
     ribbons.push({ mesh: ribbon, base: geo.attributes.position.array.slice(), phase: r * 2.1 });
   }
 
-  // Snowfall: 900 flakes drifting down inside the station bowl, wrapping around.
-  const flakeCount = 900;
+  // Snowfall: 1200 flakes drifting down inside the station bowl, wrapping around.
+  const flakeCount = 1200;
   const flakePos = new Float32Array(flakeCount * 3);
   const flakeSpeed = new Float32Array(flakeCount);
   for (let i = 0; i < flakeCount; i += 1) {
@@ -220,7 +229,7 @@ export function createMap(scene, random) {
   scene.add(flakes);
 
   // Light: cold moonlight as the key, a soft sky fill, warm door lamps.
-  const moon = new THREE.DirectionalLight(new THREE.Color('#bcd6f5'), 2.4);
+  const moon = new THREE.DirectionalLight(new THREE.Color('#bcd6f5'), 2.7);
   moon.position.set(-14, 26, 12);
   moon.target.position.set(0, 0, -4);
   moon.castShadow = true;
@@ -232,7 +241,7 @@ export function createMap(scene, random) {
   moon.shadow.camera.far = 70;
   moon.shadow.bias = -0.0005;
   scene.add(moon, moon.target);
-  scene.add(new THREE.HemisphereLight(new THREE.Color('#5f7fa8'), new THREE.Color('#1d2a3a'), 1.15));
+  scene.add(new THREE.HemisphereLight(new THREE.Color('#5f7fa8'), new THREE.Color('#1d2a3a'), 1.25));
   const habLamp = new THREE.PointLight(new THREE.Color(PALETTE.habGlow), 14, 12);
   habLamp.position.set(-10.6, 2.2, -2);
   scene.add(habLamp);
@@ -265,7 +274,7 @@ export function createMap(scene, random) {
         pos.setZ(i, Math.sin(time * 0.4 + bx * 0.06 + ribbon.phase) * 0.8);
       }
       pos.needsUpdate = true;
-      ribbon.mesh.material.opacity = 0.12 + Math.sin(time * 0.3 + ribbon.phase) * 0.05;
+      ribbon.mesh.material.opacity = 0.17 + Math.sin(time * 0.3 + ribbon.phase) * 0.06;
     }
     const positions = flakeGeo.attributes.position;
     for (let i = 0; i < flakeCount; i += 1) {

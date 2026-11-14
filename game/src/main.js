@@ -88,10 +88,15 @@ function syncHitbox() {
 function syncHud() {
   const def = arsenal.currentDef();
   hud.setHealth(body.health, body.armor);
-  hud.setAmmo(arsenal.mag(), arsenal.reserve(), def.name, arsenal.state.grenades);
+  hud.setAmmo(arsenal.mag(), arsenal.reserve(), def.name, arsenal.grenadeText());
   hud.setMoney(state.money);
   hud.setScore(state.playerRounds, state.botRounds);
   hud.setRound(state.round, state.maxRounds);
+  hud.setMinimap({
+    x: body.position.x, z: body.position.z, yaw: body.yaw,
+    bots: bots.bots.map((bot) => ({ x: bot.position.x, z: bot.position.z, alive: bot.alive })),
+    charge: state.charge,
+  });
   if (state.phase === PHASE.LIVE) {
     if (state.charge === 'planted') {
       if (bots.anyDefusing()) hud.setPlant(state.defuseProgress, 'defuse');
@@ -128,8 +133,8 @@ hud.onPlay(() => {
 
 hud.onBuy((id) => {
   if (state.phase !== PHASE.BUY) return;
-  if (id === 'grenade') {
-    const cost = arsenal.buyGrenade(state.money);
+  if (id === 'grenade' || id === 'smoke') {
+    const cost = arsenal.buyGrenade(state.money, id);
     if (cost !== null) {
       state.money -= cost;
       audio.buy();
@@ -168,7 +173,18 @@ function tryFire() {
   firedLastFrame = input.state.firing;
   if (!wantFire || !arsenal.ready()) return;
   if (!combat.shoot(camera, arsenal.spread(player.groundSpeed(), input.state.aiming), random)) return;
+  state.lastShotTime = elapsed;
   player.recoil(def.id === 'sniper' ? 0.035 : 0.01 + random() * 0.004, (random() * 2 - 1) * 0.004);
+  syncHud();
+}
+
+function throwGrenade(kind) {
+  if (!arsenal.useGrenade(kind)) return;
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  const from = camera.position.clone().add(dir.clone().multiplyScalar(0.5));
+  if (kind === 'smoke') combat.throwSmoke(from, dir);
+  else combat.throwGrenade(from, dir);
   syncHud();
 }
 
@@ -182,7 +198,8 @@ function step(dt) {
     player: body,
     playerSpeed: player.groundSpeed(),
     state,
-    onBotFire: (bot, spread) => combat.botFire(bot, spread, random, playerHitMesh),
+    smokeBlocks: (a, b) => combat.smokeBlocks(a, b),
+    onBotFire: (bot, spread, damage) => combat.botFire(bot, spread, random, playerHitMesh, damage),
   });
   combat.step(dt, elapsed);
   map.step(dt, elapsed);
@@ -202,12 +219,8 @@ function frame(now) {
       if (input.wasPressed('Digit2')) arsenal.switchTo('smg');
       if (input.wasPressed('Digit3')) arsenal.switchTo('sniper');
       if (input.wasPressed('KeyR') && arsenal.reload()) audio.reload();
-      if (input.wasPressed('KeyG') && arsenal.useGrenade()) {
-        const dir = new THREE.Vector3();
-        camera.getWorldDirection(dir);
-        combat.throwGrenade(camera.position.clone().add(dir.clone().multiplyScalar(0.5)), dir);
-        syncHud();
-      }
+      if (input.wasPressed('KeyG')) throwGrenade('cryo');
+      if (input.wasPressed('KeyQ')) throwGrenade('smoke');
       tryFire();
     }
     targetFov = state.phase === PHASE.LIVE && input.state.aiming && arsenal.currentDef().id === 'sniper'
@@ -288,6 +301,9 @@ function runShot(name) {
     body.position.set(1.8, 0, -5.2);
     settle(20);
     aimAt(new THREE.Vector3(0, 1.2, -9.6));
+    // A smoke cloud hangs over the pad in this frame: cover for the defence.
+    combat.deploySmoke(new THREE.Vector3(0, 1.4, -9.6));
+    settle(20);
     syncHud();
   } else {
     state.phase = PHASE.MATCH_END;

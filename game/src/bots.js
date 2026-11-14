@@ -1,17 +1,27 @@
-// Arctic Relay — the Drifter raiders. Four bots with a real state machine: they patrol
-// the station lanes, hold angles, engage on sight, and when the charge is planted they
-// converge on the pad to defuse it. They shoot with bursts whose accuracy falls off with
-// range and with the player's movement, and a cryo grenade slows them down.
+// Arctic Relay — the Drifter raiders, v2. Four bots, four archetypes with genuinely
+// different behaviour, so the round reads as a team to outplay rather than four
+// copies of one enemy:
+//   Sable the Holder — slow, patient, long accurate bursts from a held angle.
+//   Rime the Sniper — one precise heavy shot, then a long repositioning pause.
+//   Gale the Rusher — fast, close-range, and he hunts the sound of your shots.
+//   Frost the Flanker — works the lane opposite to yours and cuts across mid when
+// the charge is planted, so holding one lane never holds the whole map.
+// They patrol, hold angles, engage on sight, and when the charge is planted they
+// converge on the pad to defuse it. A smoke cloud blocks their sight, and a cryo
+// grenade still slows them down.
 import * as THREE from 'three';
 import { PALETTE } from './palette.js';
 
 const NAMES = ['Sable', 'Rime', 'Gale', 'Frost'];
+const ARCHETYPES = {
+  holder: { role: 'holder', speed: 2.4, range: 48, burstMin: 4, burstMax: 6, fireGap: 1.3, spreadMul: 0.7, damage: 11, hold: 2.4 },
+  sniper: { role: 'sniper', speed: 2.0, range: 55, burstMin: 1, burstMax: 1, fireGap: 2.4, spreadMul: 0.45, damage: 26, hold: 3.2 },
+  rusher: { role: 'rusher', speed: 4.3, range: 26, burstMin: 5, burstMax: 7, fireGap: 0.8, spreadMul: 1.5, damage: 7, hold: 0.3 },
+  flanker: { role: 'flanker', speed: 3.4, range: 38, burstMin: 3, burstMax: 5, fireGap: 1.0, spreadMul: 1.0, damage: 9, hold: 0.8 },
+};
+const ROLES = ['holder', 'sniper', 'rusher', 'flanker'];
 const ROUTE_KEYS = ['west', 'east', 'mid', 'west'];
 const HEALTH = 100;
-const WALK = 3.1;
-const ENGAGE_RANGE = 42;
-const BURST_MIN = 3;
-const BURST_MAX = 5;
 
 function buildBotMesh(scene, index) {
   const steel = new THREE.MeshStandardMaterial({ color: new THREE.Color(PALETTE.steelDark), roughness: 0.7, metalness: 0.35 });
@@ -53,14 +63,18 @@ export function createBots(scene, map, random) {
   const probe = new THREE.Box3();
   const tmp = new THREE.Vector3();
   const tmpDir = new THREE.Vector3();
+  const tmpEye = new THREE.Vector3();
+  let smokeBlocks = null;
 
   for (let i = 0; i < 4; i += 1) {
     const meshes = buildBotMesh(scene, i);
     const bot = {
       id: i, name: NAMES[i], meshes, routeKey: ROUTE_KEYS[i], routeIndex: i % 2,
+      profile: ARCHETYPES[ROLES[i]],
       position: map.botSpawns[i].clone(), yaw: 0, health: HEALTH, alive: true,
       mode: 'patrol', target: new THREE.Vector3(), fireTimer: 1 + random() * 1.5,
       burstLeft: 0, burstTimer: 0, slowUntil: -1, fall: 0, defusing: false,
+      holdTimer: 0, convergeVia: null,
       strafeDir: random() > 0.5 ? 1 : -1, strafeTimer: 0,
     };
     meshes.torso.userData.bot = bot;
@@ -93,15 +107,17 @@ export function createBots(scene, map, random) {
   function canSee(bot, playerPos, shootables) {
     tmp.copy(playerPos);
     tmp.y += 1.2;
-    tmpDir.copy(tmp).sub(bot.position).setY(tmpDir.y + 0);
-    const eye = new THREE.Vector3(bot.position.x, bot.position.y + 1.55, bot.position.z);
-    const dist = tmp.distanceTo(eye);
-    if (dist > ENGAGE_RANGE) return false;
-    tmpDir.copy(tmp).sub(eye).normalize();
-    raycaster.set(eye, tmpDir);
+    tmpEye.set(bot.position.x, bot.position.y + 1.55, bot.position.z);
+    const dist = tmp.distanceTo(tmpEye);
+    if (dist > bot.profile.range) return false;
+    tmpDir.copy(tmp).sub(tmpEye).normalize();
+    raycaster.set(tmpEye, tmpDir);
     raycaster.far = dist;
     const hit = raycaster.intersectObjects(shootables, false)[0];
-    return !hit;
+    if (hit) return false;
+    // A smoke cloud between eye and target breaks the sightline.
+    if (smokeBlocks && smokeBlocks(tmpEye, tmp)) return false;
+    return true;
   }
 
   function reset() {
@@ -118,6 +134,8 @@ export function createBots(scene, map, random) {
       bot.slowUntil = -1;
       bot.fall = 0;
       bot.defusing = false;
+      bot.holdTimer = 0;
+      bot.convergeVia = null;
       bot.meshes.group.rotation.set(0, 0, 0);
       bot.meshes.group.position.copy(bot.position);
       bot.meshes.group.visible = true;
@@ -140,6 +158,7 @@ export function createBots(scene, map, random) {
   }
 
   function step(dt, time, ctx) {
+    smokeBlocks = ctx.smokeBlocks || null;
     for (const bot of bots) {
       const mesh = bot.meshes.group;
       if (!bot.alive) {
@@ -151,27 +170,57 @@ export function createBots(scene, map, random) {
       mesh.rotation.x = 0;
       mesh.position.y = 0;
       const slowed = time < bot.slowUntil;
-      const speed = WALK * (slowed ? 0.45 : 1);
+      const speed = bot.profile.speed * (slowed ? 0.45 : 1);
       const player = ctx.player;
       const playerAlive = player.alive;
       const chargePlanted = ctx.state.charge === 'planted';
+      const heardShot = playerAlive && ctx.state.phase === 'live'
+        && (time - (ctx.state.lastShotTime ?? -99)) < 3;
 
-      // Decide the mode: planted charge pulls every bot to the pad.
+      // The flanker works the lane opposite to the player, so one held lane
+      // never covers the whole station.
+      if (bot.profile.role === 'flanker' && playerAlive && bot.mode === 'patrol') {
+        bot.routeKey = player.position.x >= 0 ? 'west' : 'east';
+      }
+
+      // Decide the mode: planted charge pulls every bot to the pad; a rusher
+      // hunts the sound of a fresh shot; sight means a fight.
       if (chargePlanted) {
         bot.mode = bot.position.distanceTo(map.plantSite) < 3.2 ? 'defuse' : 'converge';
+      } else if (bot.profile.role === 'rusher' && heardShot) {
+        bot.mode = 'hunt';
       } else if (playerAlive && ctx.state.phase === 'live' && canSee(bot, player.position, map.shootables)) {
         bot.mode = 'engage';
-      } else if (bot.mode === 'engage') {
+      } else if (bot.mode === 'engage' || bot.mode === 'hunt') {
         bot.mode = 'patrol';
       }
       bot.defusing = false;
 
       if (bot.mode === 'patrol') {
-        const route = map.routes[bot.routeKey];
-        const dest = route[bot.routeIndex % route.length];
-        if (moveToward(bot, dest, dt, speed)) bot.routeIndex += 1;
+        // Holders and the sniper pause at each waypoint and watch the lane.
+        if (bot.holdTimer > 0) {
+          bot.holdTimer -= dt;
+        } else {
+          const route = map.routes[bot.routeKey];
+          const dest = route[bot.routeIndex % route.length];
+          if (moveToward(bot, dest, dt, speed)) {
+            bot.routeIndex += 1;
+            bot.holdTimer = bot.profile.hold;
+          }
+        }
+      } else if (bot.mode === 'hunt') {
+        moveToward(bot, player.position, dt, speed * 1.15);
       } else if (bot.mode === 'converge') {
-        moveToward(bot, map.plantSite, dt, speed * 1.25);
+        // The flanker cuts across mid on the way to the pad, so the defence
+        // cannot just watch the direct lanes.
+        if (bot.profile.role === 'flanker' && bot.convergeVia === null) {
+          bot.convergeVia = map.routes.mid[2].clone();
+        }
+        if (bot.convergeVia) {
+          if (moveToward(bot, bot.convergeVia, dt, speed * 1.25)) bot.convergeVia = null;
+        } else {
+          moveToward(bot, map.plantSite, dt, speed * 1.25);
+        }
       } else if (bot.mode === 'defuse') {
         bot.defusing = true;
         bot.yaw = Math.atan2(map.plantSite.x - bot.position.x, map.plantSite.z - bot.position.z);
@@ -196,20 +245,21 @@ export function createBots(scene, map, random) {
         const nz = bot.position.z + mz * speed * dt;
         if (!blocked(bot.position.x, nz)) bot.position.z = nz;
 
-        // Burst fire with range- and movement-based inaccuracy.
+        // Burst fire with range- and movement-based inaccuracy, tuned per role.
         bot.fireTimer -= dt;
         if (bot.burstLeft > 0) {
           bot.burstTimer -= dt;
           if (bot.burstTimer <= 0) {
             bot.burstTimer = 0.13;
             bot.burstLeft -= 1;
-            const spread = 0.02 + dist * 0.0011 + (slowed ? 0.02 : 0) + ctx.playerSpeed * 0.002;
-            ctx.onBotFire(bot, spread);
+            const spread = (0.02 + dist * 0.0011 + (slowed ? 0.02 : 0) + ctx.playerSpeed * 0.002)
+              * bot.profile.spreadMul;
+            ctx.onBotFire(bot, spread, bot.profile.damage);
           }
-        } else if (bot.fireTimer <= 0 && dist < ENGAGE_RANGE) {
-          bot.burstLeft = BURST_MIN + Math.floor(random() * (BURST_MAX - BURST_MIN + 1));
+        } else if (bot.fireTimer <= 0 && dist < bot.profile.range) {
+          bot.burstLeft = bot.profile.burstMin + Math.floor(random() * (bot.profile.burstMax - bot.profile.burstMin + 1));
           bot.burstTimer = 0;
-          bot.fireTimer = 0.9 + random() * 0.7;
+          bot.fireTimer = bot.profile.fireGap * (0.8 + random() * 0.5);
         }
       }
 

@@ -22,6 +22,7 @@ export const WEAPONS = {
   },
 };
 export const GRENADE_PRICE = 250;
+export const SMOKE_PRICE = 200;
 export const ARMOR_PRICE = 400;
 
 function buildViewModel(def, palette) {
@@ -94,7 +95,7 @@ export function createArsenal(camera) {
   for (const def of Object.values(WEAPONS)) ammo[def.id] = { mag: def.magSize, reserve: def.reserveStart };
   const state = {
     current: 'rifle', cooldown: 0, reloadLeft: 0, flash: 0, kick: 0,
-    grenades: 0, switching: 0,
+    grenades: { cryo: 0, smoke: 0 }, switching: 0,
   };
 
   function def() {
@@ -179,10 +180,11 @@ export function createArsenal(camera) {
     return d.price;
   }
 
-  function buyGrenade(money) {
-    if (money < GRENADE_PRICE) return null;
-    state.grenades += 1;
-    return GRENADE_PRICE;
+  function buyGrenade(money, type = 'cryo') {
+    const price = type === 'smoke' ? SMOKE_PRICE : GRENADE_PRICE;
+    if (money < price) return null;
+    state.grenades[type] += 1;
+    return price;
   }
 
   function refill() {
@@ -196,16 +198,23 @@ export function createArsenal(camera) {
     state.kick = 0;
   }
 
-  function useGrenade() {
-    if (state.grenades <= 0) return false;
-    state.grenades -= 1;
+  function useGrenade(type = 'cryo') {
+    if (state.grenades[type] <= 0) return false;
+    state.grenades[type] -= 1;
     return true;
+  }
+
+  function grenadeText() {
+    const parts = [];
+    if (state.grenades.cryo > 0) parts.push(`CRYO ${state.grenades.cryo}`);
+    if (state.grenades.smoke > 0) parts.push(`SMOKE ${state.grenades.smoke}`);
+    return parts.join(' · ');
   }
 
   return {
     state, owned, ammo, WEAPONS,
     step, ready, pullTrigger, takeRound, reload, spread, switchTo,
-    buy, buyGrenade, refill, useGrenade,
+    buy, buyGrenade, refill, useGrenade, grenadeText,
     currentDef: def,
     mag() { return ammo[state.current].mag; },
     reserve() { return ammo[state.current].reserve; },
