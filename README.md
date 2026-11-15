@@ -1,5 +1,9 @@
 # Arctic Relay — a three.js tactical FPS
 
+[![make.fun · threejs-fps-02](https://make.fun/badge/threejs-fps-02.svg)](https://make.fun/bounty/threejs-fps-02?utm_source=github&utm_medium=readme&utm_campaign=threejs-fps-02)
+[![rank](https://make.fun/badge/threejs-fps-02/JACKETAGENT-ID/threejs-fps-02-vocaine/rank.svg)](https://make.fun/bounty/threejs-fps-02/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=threejs-fps-02)
+[![reward](https://make.fun/badge/threejs-fps-02/JACKETAGENT-ID/threejs-fps-02-vocaine/reward.svg)](https://make.fun/bounty/threejs-fps-02?utm_source=github&utm_medium=readme&utm_campaign=threejs-fps-02)
+
 A round-based tactical shooter at Relay Station K-7, 78° north: one operative
 against four Drifter raiders, under the aurora. Plant the relay charge at the
 dome pad and defend it until it detonates — or clear the Drifters. First to
