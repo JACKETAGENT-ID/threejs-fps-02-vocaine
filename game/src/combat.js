@@ -194,7 +194,7 @@ export function createCombat(scene, map, bots, player, arsenal, audio, hud, stat
     cloud.life = SMOKE_LIFE;
     cloud.maxLife = SMOKE_LIFE;
     cloud.group.visible = true;
-    for (const puff of cloud.parts) puff.material.opacity = 0.45;
+    for (const puff of cloud.parts) puff.material.opacity = 0.36;
   }
 
   // True when the segment from a to b passes through any live smoke cloud.
@@ -259,7 +259,7 @@ export function createCombat(scene, map, bots, player, arsenal, audio, hud, stat
       if (cloud.life <= 0) continue;
       cloud.life -= dt;
       const fade = cloud.life < 2 ? Math.max(0, cloud.life / 2) : 1;
-      for (const puff of cloud.parts) puff.material.opacity = 0.45 * fade;
+      for (const puff of cloud.parts) puff.material.opacity = 0.36 * fade;
       cloud.group.position.y = cloud.center.y + Math.sin(time * 0.8 + cloud.center.x) * 0.15;
       if (cloud.life <= 0) cloud.group.visible = false;
     }

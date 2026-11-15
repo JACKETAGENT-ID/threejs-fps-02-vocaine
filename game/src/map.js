@@ -248,6 +248,27 @@ export function createMap(scene, random) {
   const labLamp = new THREE.PointLight(new THREE.Color('#bcd6f5'), 10, 10);
   labLamp.position.set(10.6, 2.4, -4);
   scene.add(labLamp);
+  // A cold floodlight over the plant pad: the objective stays readable even
+  // when a whiteout gust swallows the rest of the station.
+  const padLamp = new THREE.PointLight(new THREE.Color(PALETTE.accent), 9, 13);
+  padLamp.position.set(0, 4.5, -9.6);
+  scene.add(padLamp);
+
+  // Objective beacon: a floating diamond over the pad that bobs and turns,
+  // so the relay objective reads from anywhere on the map, in any weather.
+  const beaconMarker = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.55),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(PALETTE.accent), transparent: true, opacity: 0.9, fog: false }),
+  );
+  beaconMarker.position.set(0, 4.4, -9.6);
+  scene.add(beaconMarker);
+  const beaconRing = new THREE.Mesh(
+    new THREE.TorusGeometry(1.1, 0.05, 8, 32),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(PALETTE.accent), transparent: true, opacity: 0.55, fog: false }),
+  );
+  beaconRing.position.set(0, 4.4, -9.6);
+  beaconRing.rotation.x = Math.PI / 2;
+  scene.add(beaconRing);
 
   // Routes the bots patrol, and the spawns both sides use.
   const routes = {
@@ -264,7 +285,35 @@ export function createMap(scene, random) {
   ];
   const plantSite = new THREE.Vector3(0, 0, -9.6);
 
+  // The blizzard: a slow weather cycle the whole station breathes with.
+  // Calm spells (intensity near 0.15) give long sightlines; whiteout gusts
+  // (intensity near 1, roughly every 40 seconds) close the fog in, drive the
+  // snow sideways and cut every sightline — bots included. The value is a
+  // pure function of time, so a seeded capture reproduces the same weather.
+  const storm = { intensity: 0.15, gusting: false };
+  function stormIntensityAt(time) {
+    const cycle = 0.5 + 0.5 * Math.sin(time * 0.16 + 1.3);
+    const gust = Math.max(0, Math.sin(time * 0.55)) ** 3;
+    return Math.min(1, 0.15 + cycle * 0.35 + gust * 0.55);
+  }
+
   function step(dt, time) {
+    storm.intensity += (stormIntensityAt(time) - storm.intensity) * Math.min(1, dt * 1.5);
+    storm.gusting = storm.intensity > 0.62;
+    // The fog itself breathes with the storm: calm 34/110, whiteout 11/42.
+    const fog = scene.fog;
+    if (fog) {
+      fog.near += ((34 - storm.intensity * 23) - fog.near) * Math.min(1, dt * 1.5);
+      fog.far += ((110 - storm.intensity * 68) - fog.far) * Math.min(1, dt * 1.5);
+    }
+    // Moonlight dims a little in a gust; the pad lamp holds the objective.
+    moon.intensity = 2.7 - storm.intensity * 0.9;
+    padLamp.intensity = 9 + storm.intensity * 7;
+    beaconMarker.position.y = 4.4 + Math.sin(time * 1.4) * 0.25;
+    beaconMarker.rotation.y = time * 0.9;
+    beaconMarker.material.opacity = 0.55 + storm.intensity * 0.4;
+    beaconRing.scale.setScalar(1 + Math.sin(time * 2.2) * 0.12);
+    beaconRing.material.opacity = 0.35 + storm.intensity * 0.35;
     for (const ribbon of ribbons) {
       const pos = ribbon.mesh.geometry.attributes.position;
       for (let i = 0; i < pos.count; i += 1) {
@@ -276,15 +325,19 @@ export function createMap(scene, random) {
       pos.needsUpdate = true;
       ribbon.mesh.material.opacity = 0.17 + Math.sin(time * 0.3 + ribbon.phase) * 0.06;
     }
+    // Snowfall in a storm: faster falls, a sideways wind that grows with the
+    // gust, and flakes respawning upwind so the squall never thins out.
+    const wind = storm.intensity * 5.5;
     const positions = flakeGeo.attributes.position;
     for (let i = 0; i < flakeCount; i += 1) {
-      let y = positions.getY(i) - flakeSpeed[i] * dt;
-      let x = positions.getX(i) + Math.sin(time * 0.7 + i) * dt * 0.35;
+      let y = positions.getY(i) - flakeSpeed[i] * (1 + storm.intensity * 2.2) * dt;
+      let x = positions.getX(i) + (Math.sin(time * 0.7 + i) * 0.35 + wind) * dt;
       if (y < 0) {
         y = 20 + random() * 2;
-        x = (random() * 2 - 1) * 24;
+        x = -24 + random() * 6;
         positions.setZ(i, (random() * 2 - 1) * 22);
       }
+      if (x > 25) x = -24;
       positions.setY(i, y);
       positions.setX(i, x);
     }
@@ -296,5 +349,12 @@ export function createMap(scene, random) {
     towerEye.scale.setScalar(time % 1.4 < 0.18 ? 1.5 : 1.0);
   }
 
-  return { colliders, shootables, group, routes, playerSpawn, botSpawns, plantSite, padRing, step };
+  return {
+    colliders, shootables, group, routes, playerSpawn, botSpawns, plantSite, padRing, step,
+    // 0..1, how hard the blizzard is blowing right now.
+    stormIntensity() { return storm.intensity; },
+    stormGusting() { return storm.gusting; },
+    // Sight multiplier the storm applies to everyone who looks through it.
+    stormSight() { return 1 - storm.intensity * 0.42; },
+  };
 }

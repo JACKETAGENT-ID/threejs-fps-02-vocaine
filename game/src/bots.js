@@ -46,6 +46,29 @@ function buildBotMesh(scene, index) {
   const gun = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.09, 0.62), steel);
   gun.position.set(0.3, 1.18, -0.18);
   group.add(legL, legR, torso, chest, head, eye, gun);
+  // Thermal signature: a heat bloom the Long Night's scope picks up. It is
+  // invisible in normal light and flares orange through fog and smoke when
+  // the player aims the thermal scope — the counterplay to whiteouts.
+  const heatCanvas = document.createElement('canvas');
+  heatCanvas.width = 32;
+  heatCanvas.height = 32;
+  const heatCtx = heatCanvas.getContext('2d');
+  const heatGrad = heatCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  heatGrad.addColorStop(0, 'rgba(255, 140, 40, 0.95)');
+  heatGrad.addColorStop(0.45, 'rgba(255, 80, 20, 0.55)');
+  heatGrad.addColorStop(1, 'rgba(255, 60, 10, 0)');
+  heatCtx.fillStyle = heatGrad;
+  heatCtx.fillRect(0, 0, 32, 32);
+  const heatTex = new THREE.CanvasTexture(heatCanvas);
+  const heat = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: heatTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending,
+    // Walls still hide a heat bloom (depth test on); smoke and fog do not —
+    // smoke writes no depth and this material ignores fog.
+    depthWrite: false, depthTest: true, fog: false,
+  }));
+  heat.scale.set(1.7, 2.1, 1);
+  heat.position.y = 1.15;
+  group.add(heat);
   group.traverse((mesh) => {
     if (mesh.isMesh) {
       mesh.castShadow = true;
@@ -53,7 +76,7 @@ function buildBotMesh(scene, index) {
     }
   });
   scene.add(group);
-  return { group, torso, head };
+  return { group, torso, head, heat, visor, chest };
 }
 
 export function createBots(scene, map, random) {
@@ -104,12 +127,13 @@ export function createBots(scene, map, random) {
     return dist < 0.4;
   }
 
-  function canSee(bot, playerPos, shootables) {
+  function canSee(bot, playerPos, shootables, sightMul = 1) {
     tmp.copy(playerPos);
     tmp.y += 1.2;
     tmpEye.set(bot.position.x, bot.position.y + 1.55, bot.position.z);
     const dist = tmp.distanceTo(tmpEye);
-    if (dist > bot.profile.range) return false;
+    // A whiteout gust shortens every sightline — bots included.
+    if (dist > bot.profile.range * sightMul) return false;
     tmpDir.copy(tmp).sub(tmpEye).normalize();
     raycaster.set(tmpEye, tmpDir);
     raycaster.far = dist;
@@ -189,7 +213,7 @@ export function createBots(scene, map, random) {
         bot.mode = bot.position.distanceTo(map.plantSite) < 3.2 ? 'defuse' : 'converge';
       } else if (bot.profile.role === 'rusher' && heardShot) {
         bot.mode = 'hunt';
-      } else if (playerAlive && ctx.state.phase === 'live' && canSee(bot, player.position, map.shootables)) {
+      } else if (playerAlive && ctx.state.phase === 'live' && canSee(bot, player.position, map.shootables, ctx.stormSight ?? 1)) {
         bot.mode = 'engage';
       } else if (bot.mode === 'engage' || bot.mode === 'hunt') {
         bot.mode = 'patrol';
@@ -279,8 +303,17 @@ export function createBots(scene, map, random) {
     return new THREE.Vector3(bot.position.x, bot.position.y + 1.2, bot.position.z);
   }
 
+  function setThermal(on) {
+    for (const bot of bots) {
+      const { heat, visor, chest } = bot.meshes;
+      heat.material.opacity = on && bot.alive ? 0.85 : 0;
+      visor.emissiveIntensity = on ? 3.2 : 1.5;
+      chest.emissiveIntensity = on ? 2.6 : 1.5;
+    }
+  }
+
   return {
-    bots, step, damage, reset, aliveCount, hitMeshes, aimPoint,
+    bots, step, damage, reset, aliveCount, hitMeshes, aimPoint, setThermal,
     anyDefusing() {
       return bots.some((bot) => bot.alive && bot.defusing);
     },

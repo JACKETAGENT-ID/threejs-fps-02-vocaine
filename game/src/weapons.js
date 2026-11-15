@@ -19,6 +19,9 @@ export const WEAPONS = {
     id: 'sniper', name: 'Long Night', price: 1800, magSize: 5, reserveStart: 15,
     fireGap: 1.15, reloadTime: 2.9, damage: 95, headDamage: 250,
     spreadStill: 0.0006, spreadMoving: 0.02, auto: false, zoom: 2.4,
+    // Aiming the Long Night switches on its thermal scope: Drifters flare
+    // orange through fog and smoke, the counterplay to a whiteout gust.
+    thermal: true,
   },
 };
 export const GRENADE_PRICE = 250;
@@ -65,7 +68,10 @@ function buildViewModel(def, palette) {
     bipod.position.set(0, -0.12, -0.3);
     model.add(receiver, barrel, scope, bolt, bipod);
   }
-  model.position.set(0.24, -0.21, -0.42);
+  // Slim and low, clear of the sightline: the view model frames the aim
+  // instead of covering a quarter of the screen.
+  model.position.set(0.29, -0.28, -0.6);
+  model.scale.setScalar(0.72);
   return model;
 }
 
@@ -83,11 +89,11 @@ export function createArsenal(camera) {
     new THREE.PlaneGeometry(0.26, 0.26),
     new THREE.MeshBasicMaterial({ color: new THREE.Color(PALETTE.tracer), transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }),
   );
-  flash.position.set(0.24, -0.18, -0.95);
+  flash.position.set(0.29, -0.25, -1.14);
   flash.visible = false;
   camera.add(flash);
   const flashLight = new THREE.PointLight(new THREE.Color(PALETTE.tracer), 0, 6);
-  flashLight.position.set(0.24, -0.16, -0.6);
+  flashLight.position.set(0.29, -0.23, -0.8);
   camera.add(flashLight);
 
   const owned = { rifle: true, smg: false, sniper: false };
@@ -108,8 +114,8 @@ export function createArsenal(camera) {
     state.switching = Math.max(0, state.switching - dt);
     state.kick += (0 - state.kick) * Math.min(1, dt * 13);
     const model = models[state.current];
-    model.position.z = -0.42 + state.kick;
-    model.position.y = -0.21 + state.kick * 0.4;
+    model.position.z = -0.6 + state.kick;
+    model.position.y = -0.28 + state.kick * 0.4;
     model.rotation.x = state.kick * 2.4;
     flash.visible = state.flash > 0;
     flash.rotation.z = state.flash * 28;

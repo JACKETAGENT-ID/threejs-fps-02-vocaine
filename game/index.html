@@ -52,6 +52,48 @@
     background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 60, 40, 0.45) 100%); }
   #damage.on { opacity: 1; }
 
+  /* Thermal scope: aiming the Long Night tints the world cold blue, warms
+     living targets orange, and draws scanlines over the frame. */
+  #thermal { position: fixed; inset: 0; pointer-events: none; opacity: 0; transition: opacity 120ms linear;
+    background:
+      repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at center, rgba(20, 60, 110, 0.10) 40%, rgba(6, 18, 40, 0.42) 100%);
+    mix-blend-mode: normal; }
+  #thermal.on { opacity: 1; }
+  #thermal-label {
+    position: fixed; left: 50%; top: 164px; transform: translateX(-50%);
+    font-family: var(--font-readout); font-size: 12px; letter-spacing: 0.28em;
+    color: #ffb35c; text-shadow: 0 0 10px rgba(255, 140, 40, 0.8); opacity: 0;
+  }
+  #thermal-label.on { opacity: 1; }
+
+  /* Blizzard banner: appears when a whiteout gust closes in. */
+  #storm {
+    position: fixed; left: 50%; top: 196px; transform: translateX(-50%);
+    font-family: var(--font-readout); font-size: 13px; letter-spacing: 0.22em;
+    color: var(--ink); background: rgba(10, 22, 38, 0.66); border: 1px solid var(--hairline);
+    border-radius: 4px; padding: 5px 12px; opacity: 0; transition: opacity 300ms linear;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.7); white-space: nowrap;
+  }
+  #storm.on { opacity: 1; }
+
+  /* Objective readout: live distance to the relay pad, under the hint line. */
+  #objective {
+    position: fixed; top: 96px; left: 50%; transform: translateX(-50%);
+    font-family: var(--font-readout); font-size: 13px; letter-spacing: 0.12em;
+    color: var(--accent); text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+  }
+  #objective .dist { color: var(--ink); }
+
+  /* Ice-slide badge, bottom-left above the health bar. */
+  #slide {
+    position: fixed; left: 32px; bottom: 72px;
+    font-family: var(--font-readout); font-size: 12px; letter-spacing: 0.2em;
+    color: var(--accent); opacity: 0; transition: opacity 120ms linear;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.7);
+  }
+  #slide.on { opacity: 1; }
+
   #minimap { position: fixed; left: 32px; top: 24px; width: 150px; height: 140px; border: 1px solid var(--hairline); border-radius: 6px; background: rgba(10, 22, 38, 0.72); }
 
   #damage-numbers { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
@@ -132,10 +174,10 @@
 
   #plant-wrap {
     position: fixed;
-    top: 104px;
+    top: 132px;
     left: 50%;
     transform: translateX(-50%);
-    width: 300px;
+    width: 420px;
     text-align: center;
   }
   #plant-wrap[hidden] { display: none; }
@@ -200,7 +242,7 @@
     display: grid;
     place-items: center;
     padding: 24px;
-    background: color-mix(in srgb, var(--canvas) 82%, transparent);
+    background: color-mix(in srgb, var(--canvas) 72%, transparent);
     pointer-events: auto;
   }
   .overlay[hidden] { display: none; }
@@ -249,6 +291,11 @@
   <div id="crosshair"><i></i><i></i><i></i><i></i></div>
   <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
   <div id="damage"></div>
+  <div id="thermal"></div>
+  <div id="thermal-label">THERMAL — HEAT SIGNATURES LIVE</div>
+  <div id="storm">❄ WHITEOUT — VISIBILITY DOWN</div>
+  <div id="objective">RELAY PAD <span class="dist">—</span></div>
+  <div id="slide">▸ SLIDING ON ICE</div>
   <div id="topbar">
     <span id="round-num">ROUND 1 / 5</span>
     <span id="score-num">0 : 0</span>
@@ -286,7 +333,8 @@
       <li><kbd>R</kbd> Reload &nbsp;·&nbsp; <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> Weapons</li>
       <li><kbd>G</kbd> Cryo grenade &nbsp;·&nbsp; <kbd>Q</kbd> Smoke grenade</li>
       <li><kbd>E</kbd> Plant charge (on the pad) &nbsp;·&nbsp; <kbd>Ctrl</kbd> Crouch</li>
-      <li><kbd>Space</kbd> Jump</li>
+      <li><kbd>Shift</kbd> Sprint &nbsp;·&nbsp; <kbd>Ctrl</kbd> while sprinting: ice slide</li>
+      <li><kbd>Space</kbd> Jump &nbsp;·&nbsp; <kbd>RMB</kbd> with Long Night: thermal scope</li>
     </ul>
   </section>
 </div>

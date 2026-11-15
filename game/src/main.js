@@ -71,6 +71,18 @@ let accumulator = 0;
 let lastTime = performance.now();
 let firedLastFrame = false;
 let targetFov = 75;
+let thermalOn = false;
+
+function syncThermal() {
+  // Thermal scope: live only while the Long Night is aimed. The heat blooms
+  // are the whiteout's counterplay — bots flare through fog and smoke.
+  const want = state.phase === PHASE.LIVE && input.state.aiming
+    && arsenal.currentDef().thermal === true;
+  if (want === thermalOn) return;
+  thermalOn = want;
+  bots.setThermal(want);
+  hud.setThermal(want);
+}
 
 function syncCamera() {
   camera.position.set(body.position.x, body.position.y + body.eye, body.position.z);
@@ -97,6 +109,15 @@ function syncHud() {
     bots: bots.bots.map((bot) => ({ x: bot.position.x, z: bot.position.z, alive: bot.alive })),
     charge: state.charge,
   });
+  hud.setSlide(body.sliding);
+  hud.setStorm(map.stormGusting());
+  // The objective readout lives only while a round is running, never over
+  // the start or match-end panels.
+  hud.setObjective(
+    (state.phase === PHASE.LIVE || state.phase === PHASE.BUY)
+      ? body.position.distanceTo(map.plantSite) : null,
+    state.charge === 'planted',
+  );
   if (state.phase === PHASE.LIVE) {
     if (state.charge === 'planted') {
       if (bots.anyDefusing()) hud.setPlant(state.defuseProgress, 'defuse');
@@ -198,6 +219,7 @@ function step(dt) {
     player: body,
     playerSpeed: player.groundSpeed(),
     state,
+    stormSight: map.stormSight(),
     smokeBlocks: (a, b) => combat.smokeBlocks(a, b),
     onBotFire: (bot, spread, damage) => combat.botFire(bot, spread, random, playerHitMesh, damage),
   });
@@ -225,6 +247,7 @@ function frame(now) {
     }
     targetFov = state.phase === PHASE.LIVE && input.state.aiming && arsenal.currentDef().id === 'sniper'
       ? 75 / arsenal.currentDef().zoom : 75;
+    syncThermal();
     accumulator += dt;
     let steps = 0;
     while (accumulator >= FIXED_STEP && steps < 5) {
@@ -277,12 +300,18 @@ function runShot(name) {
   } else if (name === 'play') {
     rounds.startMatch();
     rounds.startLive();
+    // The play frame shows the v3 thermal scope: Long Night aimed, Drifters
+    // flaring orange through the falling snow.
+    arsenal.buy('sniper', 100000);
+    arsenal.switchTo('sniper');
     bots.bots[0].position.set(-4.5, 0, -6);
     bots.bots[1].position.set(5.5, 0, -9);
     bots.bots[2].position.set(-8, 0, -11);
     body.position.set(-1.5, 0, 4.5);
     settle(20);
     aimAt(bots.aimPoint(0));
+    bots.setThermal(true);
+    hud.setThermal(true);
     combat.shoot(camera, 0, random);
     settle(10);
     combat.shoot(camera, 0, random);
@@ -295,10 +324,12 @@ function runShot(name) {
     rounds.startLive();
     state.charge = 'planted';
     state.detonateLeft = 17;
-    bots.bots[0].position.set(3.5, 0, -7.5);
+    // Converging Drifters start wide of the lens this time, so the pad, the
+    // beacon and the defuse bar read instead of a bot's back.
+    bots.bots[0].position.set(-5.5, 0, -12);
     bots.bots[0].mode = 'converge';
-    bots.bots[1].position.set(-4, 0, -12);
-    body.position.set(1.8, 0, -5.2);
+    bots.bots[1].position.set(5, 0, -13);
+    body.position.set(2.8, 0, -3.2);
     settle(20);
     aimAt(new THREE.Vector3(0, 1.2, -9.6));
     // A smoke cloud hangs over the pad in this frame: cover for the defence.

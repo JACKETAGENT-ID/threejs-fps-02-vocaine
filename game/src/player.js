@@ -9,8 +9,11 @@ const HEIGHT_CROUCH = 1.14;
 const EYE_STAND = 1.62;
 const EYE_CROUCH = 1.04;
 const SPEED_WALK = 5.4;
+const SPEED_SPRINT = 7.6;
 const SPEED_CROUCH = 2.5;
 const SPEED_AIM = 3.4;
+const SLIDE_TIME = 0.95;
+const SLIDE_MIN_SPEED = 5.0;
 const ACCEL_GROUND = 46;
 const ACCEL_AIR = 10;
 const FRICTION = 9.5;
@@ -27,6 +30,8 @@ export function createPlayer(colliders) {
     height: HEIGHT_STAND,
     onGround: true,
     crouching: false,
+    sliding: false,
+    sprinting: false,
     aiming: false,
     health: 100,
     armor: 0,
@@ -54,18 +59,36 @@ export function createPlayer(colliders) {
     body.yaw += yawKick;
   }
 
+  let slideLeft = 0;
+
   function step(dt, keys, aiming) {
     if (!body.alive) return;
     const crouchKey = keys.has('ControlLeft') || keys.has('ControlRight') || keys.has('KeyC');
+    const sprintKey = keys.has('ShiftLeft') || keys.has('ShiftRight');
+    const speedNow = Math.hypot(body.velocity.x, body.velocity.z);
+    // Ice slide: sprint across the frozen ground, then drop (Ctrl) and the
+    // operative keeps gliding on the ice with almost no friction — fast, low,
+    // and hard to hit, but the slide steers sluggishly and firing from it is
+    // wild. A slide starts only from a sprint, and ends when its time or its
+    // speed runs out.
+    if (body.onGround && crouchKey && !body.sliding && speedNow > SLIDE_MIN_SPEED && !aiming) {
+      body.sliding = true;
+      slideLeft = SLIDE_TIME;
+    }
+    if (body.sliding) {
+      slideLeft -= dt;
+      if (slideLeft <= 0 || speedNow < 2.6 || !body.onGround) body.sliding = false;
+    }
+    body.sprinting = sprintKey && !body.crouching && !body.sliding && !aiming && speedNow > 4;
     if (crouchKey && !body.crouching) {
       body.crouching = true;
       body.height = HEIGHT_CROUCH;
-    } else if (!crouchKey && body.crouching && !hits(body.position.x, body.position.y, body.position.z, HEIGHT_STAND, 0.02)) {
+    } else if (!crouchKey && body.crouching && !body.sliding && !hits(body.position.x, body.position.y, body.position.z, HEIGHT_STAND, 0.02)) {
       body.crouching = false;
       body.height = HEIGHT_STAND;
     }
     body.aiming = aiming;
-    const eyeTarget = body.crouching ? EYE_CROUCH : EYE_STAND;
+    const eyeTarget = body.sliding ? 0.82 : body.crouching ? EYE_CROUCH : EYE_STAND;
     body.eye += (eyeTarget - body.eye) * Math.min(1, dt * 12);
 
     const forward = (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0);
@@ -77,12 +100,15 @@ export function createPlayer(colliders) {
       wish.set(-sin * forward + cos * strafe, 0, -cos * forward - sin * strafe).normalize();
     }
 
-    const topSpeed = body.crouching ? SPEED_CROUCH : aiming ? SPEED_AIM : SPEED_WALK;
-    const blend = Math.min(1, (body.onGround ? ACCEL_GROUND : ACCEL_AIR) * dt / topSpeed);
+    const topSpeed = body.sliding ? speedNow : body.crouching ? SPEED_CROUCH
+      : aiming ? SPEED_AIM : sprintKey ? SPEED_SPRINT : SPEED_WALK;
+    const accel = body.sliding ? ACCEL_AIR * 0.35 : body.onGround ? ACCEL_GROUND : ACCEL_AIR;
+    const blend = Math.min(1, accel * dt / Math.max(1, topSpeed));
     body.velocity.x += (wish.x * topSpeed - body.velocity.x) * blend;
     body.velocity.z += (wish.z * topSpeed - body.velocity.z) * blend;
     if (body.onGround && wish.lengthSq() === 0) {
-      const damp = Math.max(0, 1 - FRICTION * dt);
+      // On ice a slide barely slows: friction 0.55 while sliding, 9.5 else.
+      const damp = Math.max(0, 1 - (body.sliding ? 0.55 : FRICTION) * dt);
       body.velocity.x *= damp;
       body.velocity.z *= damp;
     }
@@ -142,6 +168,9 @@ export function createPlayer(colliders) {
     body.eye = EYE_STAND;
     body.height = HEIGHT_STAND;
     body.crouching = false;
+    body.sliding = false;
+    body.sprinting = false;
+    slideLeft = 0;
     body.onGround = true;
     body.health = 100;
     body.armor = 0;

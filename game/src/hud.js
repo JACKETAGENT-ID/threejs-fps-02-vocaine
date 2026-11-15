@@ -3,7 +3,7 @@
 // defuse bars, kill feed, the buy menu and every overlay live here.
 const BUY_ITEMS = [
   { id: 'smg', name: 'Frostbite SMG', price: 900, desc: 'Fast close-quarters spray, 32-round mag.' },
-  { id: 'sniper', name: 'Long Night', price: 1800, desc: 'One-shot precision at range, 5-round mag.' },
+  { id: 'sniper', name: 'Long Night', price: 1800, desc: 'One-shot precision at range, 5-round mag. Aim: thermal scope.' },
   { id: 'grenade', name: 'Cryo Grenade', price: 250, desc: 'Blast + freeze: slows Drifters for 4s.' },
   { id: 'smoke', name: 'Smoke Grenade', price: 200, desc: 'Thick cover for 8s: blocks Drifter sight.' },
   { id: 'armor', name: 'Plated Vest', price: 400, desc: 'Absorbs 60% of damage until it breaks.' },
@@ -40,6 +40,11 @@ export function createHud() {
   const minimap = el('minimap');
   const minimapCtx = minimap ? minimap.getContext('2d') : null;
   const damageLayer = el('damage-numbers');
+  const thermalOverlay = el('thermal');
+  const thermalLabel = el('thermal-label');
+  const stormBanner = el('storm');
+  const objectiveLine = el('objective');
+  const slideBadge = el('slide');
 
   // Floating damage numbers: a small pool of divs, reused so a firefight
   // never allocates DOM nodes mid-frame.
@@ -65,6 +70,10 @@ export function createHud() {
   let lastTimer = -1;
   let lastScore = '';
   let lastRound = '';
+  let lastStorm = false;
+  let lastThermal = false;
+  let lastSlide = false;
+  let lastObjective = '';
   let hitTimer = 0;
   let buyHandler = null;
 
@@ -214,6 +223,45 @@ export function createHud() {
     setHint(text) {
       if (hintBar.textContent !== text) hintBar.textContent = text;
     },
+    // Whiteout banner: on while a gust is blowing, off in the calm between.
+    setStorm(gusting) {
+      if (gusting === lastStorm) return;
+      lastStorm = gusting;
+      stormBanner.classList.toggle('on', gusting);
+    },
+    // Live distance to the relay pad, so the objective never needs guessing.
+    // Once the charge is planted the detonation bar owns the top of the
+    // screen, so this line hides instead of doubling it.
+    setObjective(distanceM, planted) {
+      if (distanceM === null) {
+        objectiveLine.style.display = 'none';
+        lastObjective = '';
+        return;
+      }
+      objectiveLine.style.display = planted ? 'none' : '';
+      if (planted) {
+        lastObjective = '';
+        return;
+      }
+      const text = `RELAY PAD ${Math.round(distanceM)}m`;
+      if (text === lastObjective) return;
+      lastObjective = text;
+      objectiveLine.textContent = text;
+    },
+    // Thermal scope overlay + label, while the Long Night is aimed.
+    setThermal(on) {
+      if (on === lastThermal) return;
+      lastThermal = on;
+      thermalOverlay.classList.toggle('on', on);
+      thermalLabel.classList.toggle('on', on);
+      crosshair.style.opacity = on ? '0.35' : '';
+    },
+    // Ice-slide badge while the operative is gliding.
+    setSlide(on) {
+      if (on === lastSlide) return;
+      lastSlide = on;
+      slideBadge.classList.toggle('on', on);
+    },
 
     hitMarker(killed, holdMs = 90) {
       hitmarker.classList.add('on');
@@ -268,7 +316,7 @@ export function createHud() {
     showOverlay(mode, state) {
       if (mode === 'start') {
         overlayTitle.textContent = 'ARCTIC RELAY';
-        overlayCopy.textContent = 'Relay Station K-7, 78° north. Plant the relay charge at the dome pad — or clear the Drifters. Sable holds the lanes, Rime snipes, Gale hunts your gunfire, Frost flanks. Smoke (Q) breaks their sight.';
+        overlayCopy.textContent = 'Relay Station K-7, 78° north. Plant the relay charge at the dome pad — or clear the Drifters. Whiteout gusts kill sightlines — aim the Long Night to see heat through them. Sprint (Shift), then drop (Ctrl) to slide the ice. Smoke (Q) breaks their sight.';
         playBtn.textContent = 'Deploy';
       } else if (mode === 'paused') {
         overlayTitle.textContent = 'Paused';

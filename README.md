@@ -26,6 +26,14 @@ dome pad and defend it until it detonates — or clear the Drifters. First to
   the Holder, Rime the Sniper, Gale the Rusher (he hunts your gunfire) and
   Frost the Flanker (he works the lane opposite to yours and cuts across
   mid when the charge is planted).
+- **The storm (v3):** a blizzard cycle breathes over the station — calm
+  spells with long sightlines, then whiteout gusts that close the fog in,
+  drive the snow sideways and cut every sightline, bots included. Aiming
+  the Long Night switches on its **thermal scope**: Drifters flare orange
+  through fog and smoke, the whiteout's counterplay. **Sprint (Shift)**
+  then drop (Ctrl) to **slide across the ice** — fast, low and hard to
+  hit, but wild to fire from. A floating beacon and a live "RELAY PAD 12m"
+  readout keep the objective readable in any weather.
 - **The map:** an original arctic research station — Relay Dome, Hab and Lab
   modules, comms tower, snowdrifts, ice walls and crates — under an aurora sky
   with falling snow, cold moonlight and warm door lamps.
@@ -42,8 +50,9 @@ node serve.ts        # game/ on http://localhost:8080
 
 Click Deploy, then play. `B` is not needed — the buy menu opens between
 rounds. `1/2/3` switch weapons, `G` throws a cryo grenade, `Q` throws a
-smoke grenade, `E` plants the charge on the pad, `Ctrl` crouches, `Space`
-jumps, right mouse aims.
+smoke grenade, `E` plants the charge on the pad, `Ctrl` crouches, `Shift`
+sprints (then `Ctrl` to slide on the ice), `Space` jumps, right mouse aims
+— with the Long Night, aiming switches on the thermal scope.
 
 ## Screenshots
 
